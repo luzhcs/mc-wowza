@@ -16,12 +16,14 @@ def upload_file():
    if request.method == 'POST':
         ret = None
         try:
-                f = request.files['file']
-                in_memory_file = io.BytesIO()
-                f.save(in_memory_file)
-                data = np.fromstring(in_memory_file.getvalue(), dtype=np.uint8)
-                color_image_flag = 1
-                img = cv2.imdecode(data, color_image_flag)
+                print (request.files['file'])
+                print ("read file from requests")
+                img_str = request.files['file'].read()
+                print ("file to string buf")
+                data = np.fromstring(img_str, dtype=np.uint8)
+                print ("decode string buf to IMAGE COLOR FORMAT")
+                img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+                #print ("img: {}".format(img))
                 ret = image_predictor.predict(img)
         except Exception as e:
                 print (str(e))

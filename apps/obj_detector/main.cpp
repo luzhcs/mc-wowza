@@ -14,88 +14,82 @@
 using namespace cv;
 using namespace std;
 
-void send_img(Mat &frame){
 
-    std::vector <uchar> buffer;
-    CURLcode ret;
-    struct curl_httppost *formpost=NULL;
-    struct curl_httppost *lastptr=NULL;
-    struct curl_slist *headers=NULL;
+int send_image(Mat frame){
 
-    buffer.resize(frame.rows * frame.cols * frame.channels());
-    buffer.assign((uchar*) frame.datastart, (uchar*) frame.dataend );
-
-    cout<<"r: "<<frame.rows<<" c: "<<frame.cols<<endl;
+    //cout<<"frame size: " << frame.size <<endl;
+    vector<uchar> buf;
+    imencode(".jpg", frame, buf);
+    //cout<<buf.size()<<endl;
+    struct curl_httppost *formpost = NULL;
+    struct curl_httppost *lastptr = NULL;
+    struct curl_slist *headerlist = NULL;
     
+    curl_formadd(&formpost, &lastptr,
+        CURLFORM_COPYNAME, "content-type:",
+        CURLFORM_COPYCONTENTS, "multipart/form-data",
+        CURLFORM_END
+    );
 
-    curl_global_init(CURL_GLOBAL_ALL);
-
-    // CURLFORMcode code = curl_formadd(&formpost,
-    //            &lastptr,
-    //            CURLFORM_COPYNAME, "file",
-    //            CURLFORM_COPYCONTENTS, "send",
-    //            CURLFORM_END);
-
-    cout<<static_cast<long>(buffer.size())<<endl;
-    uchar * p = buffer.data();
-    // CURLFORMcode code = curl_formadd(&formpost, &lastptr,
-    //         CURLFORM_COPYNAME, "file",
-    //         CURLFORM_PTRCONTENTS, buffer.data(),
-    //         CURLFORM_CONTENTSLENGTH, static_cast<long>(buffer.size()),
-    //         CURLFORM_END);
-
-    cout<< buffer.size() <<endl;
-
-    // if (code != 0) {
-    //     // to avoid other problems ...
-    //     fprintf(stderr, "curl_formadd() failed\n");
-    //     exit(-1);
-    // }
-
-    headers = curl_slist_append(headers, "Content-Type: multipart/form-data");
-
+    curl_formadd(&formpost, &lastptr,
+        CURLFORM_COPYNAME, "file",
+        CURLFORM_BUFFER, "sample.jpg",
+        CURLFORM_BUFFERPTR, &buf[0],
+        CURLFORM_BUFFERLENGTH, buf.size(),
+        CURLFORM_END
+    );
 
     CURL *curl = curl_easy_init();
-    if(curl) {
-        /* set up the read callback with CURLOPT_READFUNCTION */
+
+    if (curl){
         curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:5000/upload");
-        //curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, buffer.data());
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, buffer.size());
-        ret = curl_easy_perform(curl);
-        if (ret != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                curl_easy_strerror(ret));
-        curl_easy_cleanup(curl);
+        curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
+
+        CURLcode ret = curl_easy_perform(curl);
+        long http_code = 0;
+        curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (ret == CURLE_OK){
+		    cout << "Request sent" << endl;
+		    if (http_code == 200){
+			    cout << "File sent and processed" << endl;
+		    } else {
+ 		        cout << "file upload failed, check request" << endl;
+		        /* always cleanup */
+		        curl_easy_cleanup(curl);
+            }
+		}
     }
+
 }
 
 int main()
 {
-    VideoCapture cap("rtsp://admin:Kulcloud&&@10.1.100.35:554");
+    VideoCapture cap("rtsp://admin:kulcloud@123&&@10.1.101.1:554");
     if(!cap.isOpened())
     {   
         std::cout << "Input error\n";
         return -1;
     }
     Mat frame;
-
+    std::chrono::time_point<std::chrono::system_clock> start, end;
+    std::chrono::duration<double> elapsed_seconds ;
     int iter = 0;
-    std::chrono::seconds interval(1);
-    std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
     while (true){   
         cap.read(frame);
         if (frame.empty()) {
 			std::cout << "빈 영상이 캡쳐되었습니다.\n";
 		}else {
-            //imshow("image", frame);
-            
-            std::chrono::system_clock::time_point end = std::chrono::system_clock::now();
-            std::chrono::duration<double> sec = end - start;
-            if (sec > interval) {
-                send_img(frame);
+            imshow("image", frame);
+            if (iter > 60){
+                iter = 0;
                 start = std::chrono::system_clock::now();
-            }
+                auto fut = std::async(std::launch::async, send_image, frame);
+                end = std::chrono::system_clock::now();
+                elapsed_seconds = end - start;
+                //cout<< fut.get() << endl;
+                cout<< elapsed_seconds.count() <<endl;
+            }else iter++;
+            
         }
         if (waitKey(25) >= 0) break;
     }

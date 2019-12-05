@@ -2,7 +2,10 @@
 #include <chrono>
 #include <thread>
 #include <future>
+
+// C Includes
 #include <curl/curl.h>
+#include <unistd.h>
 
 #ifdef __cplusplus
 #include <opencv2/opencv.hpp>
@@ -17,10 +20,8 @@ using namespace std;
 
 int send_image(Mat frame){
 
-    //cout<<"frame size: " << frame.size <<endl;
     vector<uchar> buf;
     imencode(".jpg", frame, buf);
-    //cout<<buf.size()<<endl;
     struct curl_httppost *formpost = NULL;
     struct curl_httppost *lastptr = NULL;
     struct curl_slist *headerlist = NULL;
@@ -77,7 +78,7 @@ int main()
     while (true){   
         cap.read(frame);
         if (frame.empty()) {
-			std::cout << "빈 영상이 캡쳐되었습니다.\n";
+			std::cout << "empty video.\n";
 		}else {
             imshow("image", frame);
             if (iter > 60){

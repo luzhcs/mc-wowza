@@ -10,6 +10,7 @@
 
 #ifdef __cplusplus
 #include <opencv2/opencv.hpp>
+#include <opencv2/videoio.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/dnn.hpp>
@@ -25,17 +26,24 @@ class Ipcam {
     char upload_url[255];
     CURL *curl;
 
+    double fps = 0.0f;
+    
+
+
     Ipcam(char *ip_cam_path_input, char* inferece_engine_url_input){
         ip_cam_path = ip_cam_path_input;
         inferece_engine_url = inferece_engine_url_input;
         strcat(upload_url, this->inferece_engine_url);
         strcat(upload_url, "/upload");
-        cout<< "init upload_url: " << upload_url <<"\n";
         curl = curl_easy_init();
+        cout<< "init curl : " << upload_url <<"\n";
+        cout<< "init rtsp: " << ip_cam_path <<"\n";    
     }
 
+    void print_fps();
     void spinner();
-    int send_image(Mat frame);
+    int re_open_cap(VideoCapture &cap);
+    void send_image(Mat frame);
 
     ~Ipcam(){
         curl_easy_cleanup(curl);

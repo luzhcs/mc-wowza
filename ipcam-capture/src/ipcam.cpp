@@ -20,7 +20,7 @@ void Ipcam::spinner(){
 
     interval_start = std::chrono::system_clock::now();
     while (true){
-        if ((end - interval_start).count() > 1000000 ) {
+        if ((end - interval_start).count() > 100000 ) {
             interval_start = std::chrono::system_clock::now();
             print_fps();
         }
@@ -32,9 +32,8 @@ void Ipcam::spinner(){
                     cout<<"Empty frame.\n";
                 }else{
                     imshow("test_frame", frame);
-                    if (iter > 60){
+                    if (iter > 30){
                         iter = 0;
-                        //auto fut = std::async(std::launch::async, &Ipcam::send_image, this, frame);
                         std::thread(&Ipcam::send_image, this, frame).detach();
                     }
                     iter++;

@@ -1,13 +1,50 @@
 # Import required modules
+import influxdb
 import time
 import cv2 as cv
+from statistics import mean 
+
 
 
 MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
-ageList = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
-genderList = ['Male', 'Female']
+
+ageList = [1, 5, 10, 17, 30, 40, 50, 80]
+genderList = [0, 1]
+json_body = [
+    {
+        "measurement": "DetectAge",
+        "tags": {
+            "host": "kulcloud",
+            "region": "pankyo",
+            "camera_host": "rtsp://admin:kulcloud@123&&@10.1.101.1:554"
+        },
+        "fields": {
+            "avg_age": 0,
+        }
+    }
+]
+
+json_body2 = [
+    {
+        "measurement": "DetectGenderCnt",
+        "tags": {
+            "host": "kulcloud",
+            "region": "pankyo",
+            "camera_host": "rtsp://admin:kulcloud@123&&@10.1.101.1:554"
+        },
+        "fields": {
+            "total": 0,
+            "male": 0,
+            "female": 0
+        }
+    }
+]
+
+influxdb_client = influxdb.InfluxDBClient( host="13.125.221.154", port=8086, database="cam_db")
 
 def getFaceBox(net, frame, conf_threshold=0.7):
+    if frame is None:
+        return None, None
     frame_opencv_dnn = frame.copy()
     frame_height = frame_opencv_dnn.shape[0]
     frame_width = frame_opencv_dnn.shape[1]
@@ -30,7 +67,7 @@ def getFaceBox(net, frame, conf_threshold=0.7):
 
     return frame_opencv_dnn, bboxes
 
-class ImagePredictor:
+class OpencvFaceDetector:
     def __init__(self):
         faceProto = "models/opencv_face_detector.pbtxt"
         faceModel = "models/opencv_face_detector_uint8.pb"
@@ -60,16 +97,18 @@ class ImagePredictor:
 
     def predict(self, frame):
         padding = 20
-        # Read frame
         t = time.time()
         ret = []
+        frame
         frameFace, bboxes = getFaceBox(self.faceNet, frame)
+        male_cnt = 0
+        female_cnt = 0
         if not bboxes:
             print("No face Detected, Checking next frame")
         else:
-
+            avg_age_list = []
+            
             for bbox in bboxes:
-                # print(bbox)
                 face = frame[
                     max( 0, bbox[1]-padding):min(bbox[3]+padding,
                         frame.shape[0]-1),max(0,bbox[0]-padding
@@ -79,21 +118,29 @@ class ImagePredictor:
                 self.genderNet.setInput(blob)
                 genderPreds = self.genderNet.forward()
                 gender = genderList[genderPreds[0].argmax()]
-                print("Gender Output : {}".format(genderPreds))
-                print("Gender : {}, conf = {:.3f}".format(gender, genderPreds[0].max()))
+                # print("Gender Output : {}".format(genderPreds))
+                # print("Gender : {}, conf = {:.3f}".format(gender, genderPreds[0].max()))
 
                 self.ageNet.setInput(blob)
                 agePreds = self.ageNet.forward()
                 age = ageList[agePreds[0].argmax()]
-                print("Age Output : {}".format(agePreds))
-                print("Age : {}, conf = {:.3f}".format(age, agePreds[0].max()))
-                
-
+                # print("Age Output : {}".format(agePreds))
+                # print("Age : {}, conf = {:.3f}".format(age, agePreds[0].max()))
                 label = "{},{}".format(gender, age)
                 ret.append({"age": age, "gender": gender})
+                avg_age_list.append(age)
+                if gender == 0:
+                    male_cnt+=1
+                else:
+                    female_cnt+=1
+                print (ret)
             
+            json_body[0]['fields']['avg_age'] = mean(avg_age_list)
+            res = influxdb_client.write_points(json_body)
             cv.putText(frameFace, label, (bbox[0], bbox[1]-10), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2, cv.LINE_AA)
-            cv.imwrite("age-gender.jpg", frameFace)
-        print("time : {:.3f}".format(time.time() - t))
+            cv.imwrite('sampleimage.png', frameFace)
 
-        return ret
+        json_body2[0]['fields']['total'] = male_cnt+female_cnt
+        json_body2[0]['fields']['male'] = male_cnt
+        json_body2[0]['fields']['female'] = female_cnt
+        res = influxdb_client.write_points(json_body2)

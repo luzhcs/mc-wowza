@@ -28,13 +28,11 @@ class Ipcam {
 
     double fps = 0.0f;
     
-
-
     Ipcam(char *ip_cam_path_input, char* inferece_engine_url_input){
         ip_cam_path = ip_cam_path_input;
         inferece_engine_url = inferece_engine_url_input;
         strcat(upload_url, this->inferece_engine_url);
-        strcat(upload_url, "/upload");
+        strcat(upload_url, "/predict");
         curl = curl_easy_init();
         cout<< "init curl : " << upload_url <<"\n";
         cout<< "init rtsp: " << ip_cam_path <<"\n";    
